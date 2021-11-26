@@ -45,12 +45,19 @@ macro_rules! read_lua_size_t {
 #[macro_export]
 macro_rules! read_lua_int {
     ($header:expr, $source:expr) => {{
+        read_integral!($header, $source, $header.int_size)
+    }};
+}
+
+#[macro_export]
+macro_rules! read_lua_number_integral {
+    ($header:expr, $source:expr) => {{
         read_integral!($header, $source, $header.size_number_integral)
     }};
 }
 
 #[macro_export]
-macro_rules! read_lua_float {
+macro_rules! read_lua_number_float {
     ($header:expr, $source:expr) => {{
         match $header.size_number_float {
             ByteSize::_8 => $header.byte_order.read_f64($source)? as f64,

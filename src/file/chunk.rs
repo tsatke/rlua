@@ -1,11 +1,14 @@
+use std::io::Read;
+
 use crate::file::byte_order::ByteOrder::{BigEndian, LittleEndian};
 use crate::file::header::ByteSize;
 use crate::file::header::Header;
 use crate::file::string::LuaString;
 use crate::file::{Constant, Local, LuaFileParseError, VarArgInfo};
 use crate::instruction::Instruction;
-use crate::{read_bytes, read_integral, read_lua_float, read_lua_int};
-use std::io::Read;
+use crate::{
+    read_bytes, read_integral, read_lua_int, read_lua_number_float, read_lua_number_integral,
+};
 
 #[derive(Debug)]
 pub struct Chunk {
@@ -41,10 +44,16 @@ impl Chunk {
 
         let constants = Chunk::parse_constants(&header, source)?;
 
+        let _ = read_bytes!(source, 10); // FIXME: don't know what that is
+
+        let source_lines = Chunk::parse_source_lines(&header, source)?;
+        let locals = Chunk::parse_locals(&header, source)?;
+        let upvalue_names = Chunk::parse_upvalues(&header, source)?;
+
         Ok(Chunk {
             name,
-            line_defined: 0,
-            last_line_defined: 0,
+            line_defined: source_lines[0],
+            last_line_defined: source_lines[source_lines.len() - 1],
             num_upvalues,
             num_params: 0,
             vararg_info: None,
@@ -52,9 +61,9 @@ impl Chunk {
             code,
             constants,
             prototypes: vec![],
-            source_lines: vec![],
-            locals: vec![],
-            upvalue_names: vec![],
+            source_lines,
+            locals,
+            upvalue_names,
         })
     }
 
@@ -73,8 +82,8 @@ impl Chunk {
                 3 => {
                     let numeric_constant_type = (constant_type & 0xf0) >> 4;
                     match numeric_constant_type {
-                        0 => Constant::FloatingNumber(read_lua_float!(header, source)),
-                        1 => Constant::IntegralNumber(read_lua_int!(header, source)),
+                        0 => Constant::FloatingNumber(read_lua_number_float!(header, source)),
+                        1 => Constant::IntegralNumber(read_lua_number_integral!(header, source)),
                         _ => return Err(LuaFileParseError::InvalidNumericConstantType),
                     }
                 }
@@ -86,5 +95,49 @@ impl Chunk {
         }
 
         Ok(constants)
+    }
+
+    fn parse_upvalues(
+        header: &Header,
+        source: &mut impl Read,
+    ) -> Result<Vec<String>, LuaFileParseError> {
+        let num_upvalues = read_lua_int!(header, source);
+        let mut upvalue_names = Vec::with_capacity(num_upvalues as usize);
+        for _ in 0..num_upvalues {
+            upvalue_names.push(LuaString::parse(&header, source)?);
+        }
+        Ok(upvalue_names)
+    }
+
+    fn parse_source_lines(
+        header: &Header,
+        source: &mut impl Read,
+    ) -> Result<Vec<u64>, LuaFileParseError> {
+        let num_source_lines = read_lua_int!(header, source);
+        let mut source_lines = Vec::with_capacity(num_source_lines as usize);
+        for _ in 0..num_source_lines {
+            source_lines.push(read_lua_int!(header, source));
+        }
+        Ok(source_lines)
+    }
+
+    fn parse_locals(
+        header: &Header,
+        source: &mut impl Read,
+    ) -> Result<Vec<Local>, LuaFileParseError> {
+        let num_locals = read_lua_int!(header, source);
+        let mut locals = Vec::with_capacity(num_locals as usize);
+        for _ in 0..num_locals {
+            let varname = LuaString::parse(&header, source)?;
+            let startpc = read_lua_int!(header, source);
+            let endpc = read_lua_int!(header, source);
+
+            locals.push(Local {
+                varname,
+                startpc,
+                endpc,
+            });
+        }
+        Ok(locals)
     }
 }

@@ -48,4 +48,8 @@ pub enum Constant {
 }
 
 #[derive(Debug)]
-pub struct Local {}
+pub struct Local {
+    varname: String,
+    startpc: u64,
+    endpc: u64,
+}
