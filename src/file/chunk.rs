@@ -3,7 +3,7 @@ use crate::file::header::ByteSize;
 use crate::file::header::Header;
 use crate::file::string::LuaString;
 use crate::file::{Constant, Local, LuaFileParseError, VarArgInfo};
-use crate::opcode::Instruction;
+use crate::instruction::Instruction;
 use crate::{read_bytes, read_integral, read_lua_float, read_lua_int};
 use std::io::Read;
 
